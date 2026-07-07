@@ -151,7 +151,7 @@ The design question is *ordering and reversibility around the escrow*, four opti
 | **Escrow release gated on mint event** | Escrow released to issuer *only after* the on-chain `mint` event is observed | Removes "minted but cash lost" and "cash released but not minted" races entirely. |
 | **Optional: tokenized cash for on-chain DvP** | Where law permits, settle the cash leg as a tokenized deposit on the *same* ledger for atomic DvP | Cleanest atomicity — but pulls money on-chain and adds its own classification (EMT / deposit-token law), the opposite of the TradFi→TradFi goal. Use only if a jurisdiction specifically wants it. |
 
-**Recommended:** *escrow + message-on-finality, with escrow release gated on the on-chain mint event, and idempotent reconciliation as source of truth.* Since the ledger carries no value, the failure surface is small: the only states are *cash-in-escrow*, *note-recorded*, *paid-out* — and any incomplete correlation auto-reverses the escrow back to the client. The reconciliation store — **not** the chain, **not** core banking alone — is the correlated source of truth binding the TradFi legs to the DLT messages.
+**Recommended (as ranked by the specialist committee, §12):** *escrow + message-on-finality, with escrow release gated on the on-chain mint event, and idempotent reconciliation as source of truth.* Since the ledger carries no value, the failure surface is small: the only states are *cash-in-escrow*, *note-recorded*, *paid-out* — and any incomplete correlation auto-reverses the escrow back to the client. The reconciliation store — **not** the chain, **not** core banking alone — is the correlated source of truth binding the TradFi legs to the DLT messages.
 
 ### 4.1 Payment → mint sequence (escrow-backed, idempotent)
 
@@ -183,6 +183,44 @@ sequenceDiagram
 ```
 
 Idempotency key = `subscriptionId`, carried from the ISO 20022 end-to-end id through FireFly's `operationId`. Re-delivery of a payment event **never** double-mints.
+
+### 4.2 The reverse leg — on-chain event → fiat-out (coupon & redemption)
+
+The mirror of §4.1. Here an **on-chain coordination event is the trigger** and the **cash movement is the effect**, back out on a TradFi rail. Same idempotency discipline, now keyed on `eventId` so a re-delivered chain event never double-pays.
+
+```mermaid
+sequenceDiagram
+    participant TK as CMTAT Token
+    participant FF as FireFly
+    participant R as Recon/Idempotency
+    participant PAY as Payout Engine
+    participant SB as Settlement Bank
+    participant C as Client
+
+    Note over TK,FF: coupon record date OR maturity / autocall
+    TK-->>FF: event Snapshot(id) / Redeemed(holder, physical?)
+    FF->>R: deliver(eventId, type, holders)
+    R->>R: idempotency check (eventId unpaid?)
+    alt coupon
+        R->>PAY: computeCoupon(units) per holder-of-record
+        PAY->>SB: pacs.008 instant credit to each holder IBAN
+        SB-->>C: coupon received (SEPA Inst / RTP / FedNow)
+    else redemption barrier OK (cash)
+        R->>PAY: par + final coupon for holder
+        PAY->>SB: pacs.008 instant credit to holder
+        SB-->>C: redemption par received
+    else redemption barrier breached (physical)
+        R->>PAY: instruct custodian to deliver underlying
+        Note over PAY,C: token already burned on-chain; delivery settles off-chain
+    end
+    SB-->>R: pacs.002 payout finality
+    R->>R: mark eventId settled (exactly-once)
+```
+
+Key rules:
+- **Burn precedes / accompanies payout**, never the reverse — the token is retired on-chain as the authoritative "this note is being settled" signal, then cash goes out. A crash between the two is recoverable because `eventId` stays unpaid until `pacs.002` finality is recorded.
+- **Coupon uses the snapshot holder set**, not the live balance — a holder who sells right after the record date still receives the coupon.
+- **Physical settlement** never moves value on-chain: burn + an off-chain custodian delivery instruction.
 
 ---
 
@@ -385,6 +423,71 @@ export async function distributeCoupon(recordDate: string) {
 }
 ```
 
+### 7.4 Variant-B reconciler — chain ↔ transfer-agent book (sync + divergence alarm)
+
+Under **Variant B** (§11) the transfer agent's book is legal truth and the chain is operational truth; they *can* drift, so a reconciler continuously proves **holder-by-holder equality** and alarms + pauses on any divergence. This is the component that makes "message bus, register stays in TradFi" safe.
+
+```typescript
+import FireFly from "@hyperledger/firefly-sdk";
+
+// Continuously reconcile on-chain CMTAT balances against the transfer-agent (TA) book.
+// Any mismatch is a hard alarm: freeze/pause on-chain, escalate to ops, block payouts.
+export async function reconcile(asOfBlock: number) {
+  const [chain, book] = await Promise.all([
+    getChainHolders(asOfBlock),   // on-chain CMTAT balances @ finalized block
+    ta.getRegister(),             // authoritative TA book (system of legal record)
+  ]);
+
+  const holders = new Set([...chain.keys(), ...book.keys()]);
+  const diffs: Divergence[] = [];
+  for (const h of holders) {
+    const onchain = chain.get(h) ?? 0n;
+    const onbook  = book.get(h)  ?? 0n;
+    if (onchain !== onbook) diffs.push({ holder: h, onchain, onbook, delta: onchain - onbook });
+  }
+
+  // Supply invariant: total on-chain MUST equal total issued on the book.
+  const chainTotal = sum(chain.values());
+  const bookTotal  = sum(book.values());
+  const supplyBreak = chainTotal !== bookTotal;
+
+  if (diffs.length === 0 && !supplyBreak) {
+    await store.recordClean(asOfBlock, chainTotal);           // green: in sync
+    return { status: "IN_SYNC", asOfBlock, total: chainTotal };
+  }
+
+  // DIVERGENCE — contain first, investigate second. Never auto-"fix" legal truth.
+  await firefly.invokeContractMethod({                        // CMTAT PauseModule
+    location: { channel: POOL }, method: "pause", input: {} });
+  await alarm.critical("RCN chain↔TA divergence", { asOfBlock, supplyBreak, diffs });
+  await store.recordDivergence(asOfBlock, diffs);
+  // Ops decides the authoritative side per governance: usually the TA book wins,
+  // chain is corrected via forced transfer / mint-burn under a documented control.
+  return { status: "DIVERGENT", asOfBlock, supplyBreak, diffs };
+}
+
+// Trigger on every finalized batch of token events + on a periodic heartbeat,
+// so drift is caught in minutes, not at month-end.
+firefly.listen(
+  { name: "recon-trigger", ephemeral: false,
+    filter: { events: "token_mint|token_transfer|token_burn" } },
+  async (_s, ev) => { await reconcile(ev.blockNumber); },
+);
+```
+
+Optionally anchor a periodic **reconciliation hash** on-chain (Merkle root of the TA book) so any party can verify the book they were shown matches the one that was reconciled — cheap, tamper-evident, no PII:
+
+```solidity
+// Anchors proof-of-reconciliation; the book itself stays off-chain (Variant B).
+function anchorReconciliation(uint256 asOfBlock, bytes32 bookMerkleRoot, bool inSync)
+    external /* onlyRole(ISSUER_ROLE) */
+{
+    emit Reconciled(asOfBlock, bookMerkleRoot, inSync, uint64(block.timestamp));
+}
+```
+
+**Governance rule baked in:** on divergence the reconciler **contains** (pause) and **escalates** — it never silently rewrites either side. Which side is authoritative is a documented control (normally the TA book); the chain is then corrected under that control, not by the daemon.
+
 ---
 
 ## 8. Reliability, reconciliation, and failure modes
@@ -460,13 +563,65 @@ The **transfer agent's traditional book remains the authoritative register.** Th
 | On-chain transfer = title change? | **Yes** | No — an instruction the TA effects |
 | Best when | single/friendly jurisdiction, want full DLT-native benefits | multi-jurisdiction rollout, US in scope, minimise legal novelty |
 
-**Guidance for this build:** since the stated goal is **cross-border, TradFi→TradFi, DLT-as-messaging**, **Variant B is the natural default** — it matches "the money never leaves TradFi" with "the *title* never has to leave TradFi either," and it deploys where DLT securities law doesn't exist yet. Reserve **Variant A** for issuances domiciled in a ledger-based-security jurisdiction (e.g. a Swiss-law RCN) where you want on-chain title finality. The code and FireFly orchestration are **identical**; only the legal wrapper, the reconciliation obligation, and the jurisdiction matrix's "legal basis" row change. Design the reconciliation store so it can serve *either* — in A it audits the chain, in B it *is* the bridge to the TA book.
+**Guidance for this build (the committee's default ranking, §12 — not a unilateral call):** since the stated goal is **cross-border, TradFi→TradFi, DLT-as-messaging**, the committee ranks **Variant B as the natural default** — it matches "the money never leaves TradFi" with "the *title* never has to leave TradFi either," and it deploys where DLT securities law doesn't exist yet. Reserve **Variant A** for issuances domiciled in a ledger-based-security jurisdiction (e.g. a Swiss-law RCN) where you want on-chain title finality. The code and FireFly orchestration are **identical**; only the legal wrapper, the reconciliation obligation, and the jurisdiction matrix's "legal basis" row change. Design the reconciliation store so it can serve *either* — in A it audits the chain, in B it *is* the bridge to the TA book.
 
 > Practical consequence for §6's matrix: under **Variant B** the "Legal basis / token-as-register" row collapses to *"conventional registered security + DLT operational overlay"* across all five jurisdictions, and the US column stops being a blocker.
 
 ---
 
-## 12. References
+## 12. Governance — the specialist committee that ranks & signs off
+
+None of the ranked decisions in this document — the coordination model (§4), the register/message fork (§11), the per-jurisdiction go/no-go (§6), or approval of any individual RCN — are made unilaterally by an engineer or a script. They are made by a **standing multi-specialist committee** (a New-Product-Approval / Product-Governance-Committee construct, familiar to any bank issuing structured products). The multi-disciplinary panel invoked at the top of this document *is* that committee.
+
+### 12.1 Membership (voting specialists)
+
+| Seat | Owns the ranking of… |
+|---|---|
+| **DLT / smart-contract engineering** | contract design, upgrade & key-management model, on-chain control surface |
+| **FireFly / integration architecture** | orchestration topology, messaging reliability, reconciliation design |
+| **Cross-border payments & settlement** | rail selection, escrow & finality model, PvP/coordination ranking (§4) |
+| **Securities & structured-products law** | instrument classification, register/message fork (§11), disclosure |
+| **AML / financial-crime compliance** | KYC/Travel-Rule posture, sanctions, per-jurisdiction eligibility (§6) |
+| **Market / credit / product risk** | barrier & underlying suitability, issuer-credit and concentration limits |
+| *(non-voting)* **Internal audit / operational risk** | challenge, records, second-line assurance |
+
+Quorum requires **at least the legal, compliance, risk and one technical seat**. Rankings are recorded with rationale; dissents are minuted.
+
+### 12.2 What the committee ranks and gates
+
+- **Architecture rankings** — ratifies (or overrides) the §4 coordination-model ranking and the §11 Variant-A-vs-B ranking *per issuance and per jurisdiction*, since the right answer changes with domicile and client base.
+- **Product approval** — each RCN (underlying, barrier, tenor, coupon, target investor category) passes product-governance sign-off before a single token can be minted.
+- **Jurisdiction go/no-go** — approves the eligible-jurisdiction set that the RuleEngine then enforces (§6).
+- **Exception & incident authority** — owns the divergence-resolution decision (§7.4), the "which side is authoritative" call, and any `pause` / forced-transfer override.
+
+### 12.3 Committee decision → on-chain gate
+
+The committee's approval is not a PDF in a drawer — it is a **precondition of the mint**, enforced technically. `ISSUER_ROLE` is a **multi-sig / MPC identity whose signers are the committee's technical delegates**, and the token records the approval reference so every issuance is auditable back to a specific committee decision.
+
+```solidity
+// A note may be minted only against a recorded, committee-approved product decision.
+mapping(bytes32 => bool) public committeeApproved; // productId => approved
+
+function recordCommitteeApproval(bytes32 productId, bytes32 minutesHash)
+    external /* onlyRole(GOVERNANCE_ROLE) */  // GOVERNANCE_ROLE = committee multisig
+{
+    committeeApproved[productId] = true;
+    emit ProductApproved(productId, minutesHash, uint64(block.timestamp));
+}
+
+function mintOnSettlement(bytes32 subId, bytes32 productId, address to, uint256 u)
+    external /* onlyRole(ISSUER_ROLE) */
+{
+    require(committeeApproved[productId], "product not committee-approved");
+    // ... RuleEngine eligibility, then _mint(to, u);
+}
+```
+
+The FireFly orchestrator refuses to submit a `mintOnSettlement` for a `productId` that is not committee-approved, so the ranking/decision authority is bound end-to-end: **no committee sign-off → no on-chain product record → no mint → no cash release.**
+
+---
+
+## 13. References
 
 - CMTAT — https://github.com/CMTA/CMTAT · CMTA standards — https://cmta.ch
 - Hyperledger FireFly — https://hyperledger.github.io/firefly/

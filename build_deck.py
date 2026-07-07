@@ -385,8 +385,69 @@ for k,(num,t,d) in enumerate(steps):
     txt(s,x+0.95,y+0.5,colw-1.05,0.45,[[(d,11,MUTE,False)]],sp=0.98)
 txt(s,0.9,6.9,11.5,0.4,[[("No warranty. Validate every control with licensed counsel and your regulators before production issuance.",11.5,MUTE,False)]])
 
-# ---------- 12 DESIGN FORK ----------
-s = slide(); header(s, "Design fork — is the token the register, or just the message?", "Pick one per issuance"); pagenum(s,12)
+# ---------- 12 FIAT-OUT SEQUENCE ----------
+s = slide(); header(s, "Reverse leg — on-chain event → fiat-out", "Coupon & redemption"); pagenum(s,12)
+lanes2 = ["CMTAT\nToken","FireFly","Recon /\nIdemp.","Payout\nEngine","Settlement\nBank","Client"]
+n2=len(lanes2); ax0=1.1; aspan=11.1; astep=aspan/(n2-1); atop=2.35; abot=6.4
+for i,l in enumerate(lanes2):
+    cx=ax0+i*astep
+    box(s,cx-0.85,atop-0.55,1.7,0.5,fill=TEAL)
+    txt(s,cx-0.85,atop-0.52,1.7,0.45,[[(l,10.5,WHITE,True)]],align=PP_ALIGN.CENTER,anchor=MSO_ANCHOR.MIDDLE,sp=0.9)
+    box(s,cx-0.006,atop,0.012,abot-atop,fill=LINE,shape=MSO_SHAPE.RECTANGLE)
+def arr2(i,j,y,label,col=INK,dash=False):
+    cx1=ax0+i*astep; cx2=ax0+j*astep
+    c=s.shapes.add_connector(2,Inches(min(cx1,cx2)),Inches(y),Inches(max(cx1,cx2)),Inches(y))
+    c.line.color.rgb=col;c.line.width=Pt(1.4)
+    le=c.line._get_or_add_ln(); end="tailEnd" if cx1>cx2 else "headEnd"
+    le.append(le.makeelement(qn('a:'+end),{'type':'triangle','w':'med','len':'med'}))
+    if dash: le.insert(0,le.makeelement(qn('a:prstDash'),{'val':'dash'}))
+    txt(s,(cx1+cx2)/2-1.6,y-0.32,3.2,0.3,[[(label,10,col,False)]],align=PP_ALIGN.CENTER)
+txt(s,ax0-0.85,2.62,2.5,0.3,[[("coupon date / maturity / autocall",9.5,MUTE,False)]])
+arr2(0,1,2.95,"event: Snapshot / Redeemed",TEAL,dash=True)
+arr2(1,2,3.4,"deliver(eventId, holders)")
+txt(s,ax0+2*astep-0.85,3.65,1.7,0.3,[[("idempotency: eventId unpaid?",9,MUTE,False)]],align=PP_ALIGN.CENTER)
+arr2(2,3,4.15,"computeCoupon / par per holder",ACCENT)
+arr2(3,4,4.6,"pacs.008 instant credit",ACCENT)
+arr2(4,5,5.05,"coupon / redemption par received",GOLD)
+arr2(4,2,5.5,"pacs.002 payout finality",TEAL,dash=True)
+txt(s,ax0+2*astep-0.85,5.62,1.7,0.3,[[("mark eventId settled",9,MUTE,False)]],align=PP_ALIGN.CENTER)
+box(s,0.9,6.62,11.53,0.62,fill=RGBColor(0xEB,0xF6,0xF6),line=LINE)
+txt(s,1.1,6.7,11.2,0.46,[
+ [("Burn precedes payout (never reverse). Coupon uses the snapshot holder set, not live balance.",11.5,NAVY,True)],
+ [("Physical settlement: burn on-chain + off-chain custodian delivery — no value ever moves on-chain.",11,MUTE,False)],
+],anchor=MSO_ANCHOR.MIDDLE,sp=1.05)
+
+# ---------- 13 RECONCILER (Variant B) ----------
+s = slide(); header(s, "Variant-B reconciler — chain ↔ transfer-agent book", "Sync + divergence alarm"); pagenum(s,13)
+# two source boxes -> reconciler -> outcomes
+box(s,0.9,2.15,3.0,1.0,fill=RGBColor(0xEB,0xF6,0xF6),line=TEAL,lw=1.4)
+txt(s,1.05,2.28,2.7,0.8,[[("Chain holders",13.5,INK,True)],[("CMTAT balances @ finalized block",10.5,MUTE,False)],[("operational truth",10,TEAL,True)]],anchor=MSO_ANCHOR.MIDDLE,sp=1.0)
+box(s,0.9,3.45,3.0,1.0,fill=RGBColor(0xF1,0xEC,0xF8),line=RGBColor(0x7A,0x4F,0xA8),lw=1.4)
+txt(s,1.05,3.58,2.7,0.8,[[("TA book",13.5,INK,True)],[("transfer-agent register",10.5,MUTE,False)],[("LEGAL truth",10,RGBColor(0x7A,0x4F,0xA8),True)]],anchor=MSO_ANCHOR.MIDDLE,sp=1.0)
+rec=box(s,4.55,2.65,2.7,1.35,fill=NAVY,line=None)
+txt(s,4.6,2.78,2.6,1.1,[[("Reconciler",15,WHITE,True)],[("holder-by-holder equality",10.5,RGBColor(0xBF,0xD2,0xF0),False)],[("+ supply invariant",10.5,RGBColor(0xBF,0xD2,0xF0),False)]],align=PP_ALIGN.CENTER,anchor=MSO_ANCHOR.MIDDLE,sp=1.05)
+def carr(x1,y1,x2,y2,col=MUTE):
+    c=s.shapes.add_connector(2,Inches(x1),Inches(y1),Inches(x2),Inches(y2));c.line.color.rgb=col;c.line.width=Pt(1.6)
+    le=c.line._get_or_add_ln();le.append(le.makeelement(qn('a:headEnd'),{'type':'triangle','w':'med','len':'med'}))
+carr(3.9,2.65,4.55,3.05,TEAL); carr(3.9,3.95,4.55,3.55,RGBColor(0x7A,0x4F,0xA8))
+box(s,7.9,2.2,4.5,0.9,fill=RGBColor(0xEC,0xF7,0xEF),line=RGBColor(0x2E,0x8B,0x57),lw=1.4)
+txt(s,8.05,2.32,4.2,0.66,[[("● IN_SYNC",13,RGBColor(0x2E,0x8B,0x57),True),("  → record clean, allow payouts",11.5,INK,False)]],anchor=MSO_ANCHOR.MIDDLE)
+box(s,7.9,3.25,4.5,1.3,fill=RGBColor(0xFB,0xEE,0xEE),line=RGBColor(0xC0,0x3A,0x3A),lw=1.4)
+txt(s,8.05,3.36,4.2,1.1,[[("● DIVERGENT",13,RGBColor(0xC0,0x3A,0x3A),True)],[("CMTAT pause() → alarm ops → block payouts.",11,INK,False)],[("Never auto-fix: TA book wins per governance;",10.5,MUTE,False)],[("chain corrected under documented control.",10.5,MUTE,False)]],anchor=MSO_ANCHOR.MIDDLE,sp=1.02)
+carr(7.25,3.05,7.9,2.65,RGBColor(0x2E,0x8B,0x57)); carr(7.25,3.55,7.9,3.9,RGBColor(0xC0,0x3A,0x3A))
+box(s,0.9,5.05,11.53,1.75,fill=RGBColor(0x0A,0x12,0x1F),line=NAVY)
+tb=s.shapes.add_textbox(Inches(1.1),Inches(5.18),Inches(11.1),Inches(1.5)); tf=tb.text_frame; tf.word_wrap=True
+for i,(t,c) in enumerate([
+ ("for (const h of holders)  if (chain[h] !== book[h])  diffs.push({h, chain[h], book[h]});",RGBColor(0xD7,0xE1,0xF0)),
+ ("if (chainTotal !== bookTotal || diffs.length)  { firefly.pause(); alarm.critical(diffs); }  // contain, don't fix",RGBColor(0xC8,0x92,0x2B)),
+ ("anchorReconciliation(block, bookMerkleRoot, inSync);   // tamper-evident proof, book stays off-chain, no PII",RGBColor(0x6B,0xC5,0x8E)),
+]):
+    p=tf.paragraphs[0] if i==0 else tf.add_paragraph(); p.line_spacing=1.3
+    r=p.add_run(); r.text=t; r.font.size=Pt(11.5); r.font.name="Consolas"; r.font.color.rgb=c
+txt(s,1.1,6.55,11,0.3,[[("Triggered on every finalized token-event batch + heartbeat → drift caught in minutes, not at month-end.",10.5,RGBColor(0x9A,0xAD,0xC8),False)]])
+
+# ---------- 14 DESIGN FORK ----------
+s = slide(); header(s, "Design fork — is the token the register, or just the message?", "Pick one per issuance"); pagenum(s,14)
 # Variant A
 box(s,0.9,2.0,5.6,4.35,fill=WHITE,line=LINE)
 box(s,0.9,2.0,5.6,0.55,fill=NAVY,shape=MSO_SHAPE.ROUND_2_SAME_RECTANGLE)
@@ -411,7 +472,37 @@ bullet(s,6.95,2.75,5.25,[
 ],sz=13,mk=TEAL)
 txt(s,0.9,6.5,11.5,0.7,[[("Code & FireFly orchestration are identical. ",13,GOLD,True),("Only the legal wrapper, reconciliation duty, and the “legal basis” matrix row change. For a cross-border TradFi→TradFi build, B is the natural default; reserve A for a Swiss-law (or EU-Pilot) issuance wanting on-chain title finality.",13,INK,False)]])
 
-# ---------- 13 CLOSE ----------
+# ---------- 15 COMMITTEE ----------
+s = slide(); header(s, "Governance — a specialist committee ranks & signs off", "No unilateral calls"); pagenum(s,15)
+txt(s,0.9,1.85,11.5,0.4,[[("Every ranked decision — coordination model, register-vs-message fork, jurisdiction go/no-go, each RCN — is a committee decision, gated on-chain.",13,MUTE,False)]])
+seats=[
+ ("DLT / contract eng.","contract & key-mgmt model",ACCENT),
+ ("FireFly architecture","messaging & reconciliation",ACCENT),
+ ("Payments & settlement","rail, escrow, §4 model rank",TEAL),
+ ("Securities law","classification, §11 fork",RGBColor(0x7A,0x4F,0xA8)),
+ ("AML / compliance","Travel Rule, §6 jurisdictions",RGBColor(0x7A,0x4F,0xA8)),
+ ("Market / credit risk","barrier, issuer & concentration",GOLD),
+]
+for k,(t,d,c) in enumerate(seats):
+    col=k%3; row=k//3; x=0.9+col*3.87; y=2.5+row*1.0
+    box(s,x,y,3.65,0.85,fill=WHITE,line=LINE)
+    box(s,x,y,0.1,0.85,fill=c,shape=MSO_SHAPE.RECTANGLE)
+    txt(s,x+0.22,y+0.1,3.35,0.66,[[(t,13,INK,True)],[(d,10.5,MUTE,False)]],anchor=MSO_ANCHOR.MIDDLE,sp=1.0)
+txt(s,0.9,4.65,11.5,0.35,[[("Quorum: legal + compliance + risk + one technical seat. Internal audit sits non-voting. Rankings minuted; dissents recorded.",11.5,NAVY,True)]])
+# on-chain gate strip
+box(s,0.9,5.15,11.53,1.65,fill=RGBColor(0x0A,0x12,0x1F),line=NAVY)
+txt(s,1.15,5.28,11.1,0.4,[[("Decision → on-chain gate  (approval is a mint precondition, not a PDF)",14,GOLD,True)]])
+chain=["Committee sign-off","recordCommitteeApproval(productId)","require(committeeApproved) → mint","cash released"]
+cw=2.7
+for i,step in enumerate(chain):
+    x=1.15+i*2.83
+    box(s,x,5.85,cw,0.7,fill=NAVY,line=None)
+    txt(s,x+0.1,5.9,cw-0.2,0.6,[[(step,11,WHITE,True)]],align=PP_ALIGN.CENTER,anchor=MSO_ANCHOR.MIDDLE,sp=0.95)
+    if i<3:
+        txt(s,x+cw-0.06,5.92,0.4,0.5,[[("→",18,GOLD,True)]])
+txt(s,1.15,6.62,11.1,0.3,[[("No committee sign-off  →  no product record  →  no mint  →  no cash. Authority bound end-to-end.",11,RGBColor(0x9A,0xAD,0xC8),False)]])
+
+# ---------- 16 CLOSE ----------
 s = slide(INK)
 box(s,0,0,SW,SH,fill=INK,shape=MSO_SHAPE.RECTANGLE)
 box(s,0.9,2.0,0.09,2.0,fill=GOLD,shape=MSO_SHAPE.RECTANGLE)
