@@ -1,6 +1,6 @@
 # Instant-Payment Front-to-Back Settlement Gateway for Tokenized Reverse Convertible Notes (RCN)
 
-### A cross-border, multi-jurisdiction reference architecture bridging TradFi instant-payment rails to a permissioned DLT, orchestrated by Hyperledger FireFly, minting / transferring / burning CMTAT tokens
+### A cross-border, multi-jurisdiction reference architecture where cash flows TradFi → TradFi and a permissioned DLT acts as the shared messaging / coordination layer — orchestrated by Hyperledger FireFly, minting / transferring / burning CMTAT tokens
 
 > **Authored by a cross-functional panel perspective:** DLT / Solidity engineering · Hyperledger FireFly integration architecture · cross-border payments & settlement · multi-jurisdiction banking, securities & AML compliance.
 >
@@ -10,9 +10,11 @@
 
 ## 0. TL;DR
 
-We describe a gateway that lets a regulated institution take **instant fiat payment** from a client on domestic real-time rails (SEPA Instant, TIPS, FedNow, RTP, UK Faster Payments), and, on confirmed settlement finality of the cash leg, **mint a CMTAT token** that represents a **Reverse Convertible Note (RCN)** — a yield-enhancement structured product = *zero-coupon bond + short put on an underlying*. Over the note's life the token supports **coupon distribution, secondary transfer under eligibility rules, and at maturity either cash redemption (burn) or physical delivery** when the barrier is breached. All on-chain actions are driven by **Hyperledger FireFly** as the orchestration layer (token connector + blockchain connector + event streams + off-chain data exchange), never by hand.
+**The money never leaves TradFi.** Cash flows **TradFi → TradFi**: the client pays on a domestic real-time rail (SEPA Instant, TIPS, FedNow, RTP, UK Faster Payments) into a regulated account, and every payout (coupon, redemption par) goes back out on a real-time rail to the client. The **permissioned DLT is not a value-transfer rail — it is the shared messaging, coordination and golden-record layer** that binds the multiple TradFi participants (issuer, paying/settlement bank, transfer agent, custodian) to a single, tamper-evident view of the note's state.
 
-The hard part is not the token. It is **atomicity between a TradFi cash leg and a DLT security leg across jurisdictions with different finality, different regulators, and different definitions of what the token legally *is***.
+On that ledger, a **CMTAT token** represents the **Reverse Convertible Note (RCN)** — a yield-enhancement structured product = *zero-coupon bond + short put on an underlying*. The token is the **authoritative register + the message** that says *"this holder owns this note, in this state."* Its lifecycle events — mint on cash finality, coupon record snapshot, transfer under eligibility, burn on redemption/settlement — are the **coordination signals** that trigger the corresponding **TradFi cash movements**. All on-chain actions are driven by **Hyperledger FireFly** as the orchestration/messaging layer (token connector + blockchain connector + event streams + off-chain private data exchange), never by hand.
+
+So the pattern is: **fiat in (TradFi) → DLT coordinates & records → fiat out (TradFi)**. The DLT replaces the reconciliation-by-email/SWIFT-message spaghetti between institutions with one shared state machine. The hard part is therefore **not** moving value on-chain — it is **correlating off-chain cash events to on-chain coordination events, idempotently, across jurisdictions** with different finality, regulators, and legal definitions of the token.
 
 ---
 
@@ -79,45 +81,52 @@ CMTAT's **RuleEngine** pattern (ERC-1404-style transfer restriction) is where in
 - **Transaction manager** — idempotent, retried, operation-tracked submission. This is what makes the "exactly-once mint per payment" guarantee tractable.
 - **Multiparty / private data** — for a consortium DLT where issuer, paying bank, and transfer agent each run a FireFly node.
 
-Net: FireFly is the deterministic state machine that turns *"cash settled with finality"* into *"token minted, once, to the right wallet, with the right restrictions, and every party notified."*
+Net: FireFly is the deterministic messaging state machine that turns *"cash settled with finality in TradFi"* into *"note recorded once on the shared ledger, every party notified"* — and, in reverse, turns *"note redeemed on the ledger"* into *"pay the client par on a TradFi rail."* It is the message bus between institutions, not a place money lives.
 
 ---
 
 ## 3. Front-to-back architecture
 
+**Read it as two TradFi cash movements (top) coordinated by one shared DLT messaging layer (bottom).**
+
 ```mermaid
-flowchart LR
-    subgraph TradFi["TradFi Instant-Payment Domain (per jurisdiction)"]
+flowchart TB
+    subgraph TF["① CASH stays in TradFi  —  fiat in → fiat out"]
+        direction LR
         C["Client / Investor"]
-        RAIL["Instant Rail\nSEPA Inst / TIPS / FedNow / RTP / FPS"]
-        SB["Settlement / Paying Bank\n(scheme participant, PSP)"]
-        LEDGER["Core Banking Ledger\n(nostro / client money)"]
+        RIN["Instant Rail IN\nSEPA Inst / TIPS / FedNow / RTP / FPS"]
+        SB["Settlement / Paying Bank\nescrow · client-money"]
+        ROUT["Instant Rail OUT\ncoupon · redemption par"]
+        C -->|subscribe: instant credit transfer| RIN --> SB
+        SB -->|coupon / redemption payout| ROUT --> C
     end
 
-    subgraph GW["Gateway"]
-        PGW["Payment Gateway\n(ISO 20022 pain/pacs)"]
-        RECON["Reconciliation &\nIdempotency Store"]
+    subgraph GW["② Gateway  —  correlates cash ⟷ ledger"]
+        direction LR
+        PGW["Payment Gateway\nISO 20022 pacs.002 finality"]
+        RECON["Reconciliation &\nIdempotency Store\n(source of truth)"]
         COMP["Compliance Engine\nKYC / AML / Travel Rule / Eligibility"]
-        FF["Hyperledger FireFly\nSupernode Orchestrator"]
+        FF["Hyperledger FireFly\nmessaging & orchestration"]
+        PGW --> RECON --> FF
+        COMP --> FF
     end
 
-    subgraph DLT["Permissioned DLT Domain"]
-        CMTAT["CMTAT RCN Token\n(+ RuleEngine)"]
-        REG["On-chain Register\n(ledger-based security)"]
-        WALLET["Investor Whitelisted Wallet\n(custodial / MPC)"]
+    subgraph DLT["③ Permissioned DLT  —  MESSAGING / coordination layer (no cash)"]
+        direction LR
+        CMTAT["CMTAT RCN Token\n= shared golden record + message"]
+        REG["Authoritative Register\nledger-based security"]
+        WALLET["Investor Whitelisted Wallet"]
+        CMTAT --- REG
+        CMTAT --- WALLET
     end
 
-    C -->|instant credit transfer| RAIL --> SB --> LEDGER
-    SB -->|pacs.002 settlement confirmation| PGW
-    PGW --> RECON --> FF
-    C -->|onboarding| COMP
-    COMP -->|eligibility attestation| FF
-    FF -->|mint / transfer / burn| CMTAT
-    CMTAT --> REG
-    CMTAT --> WALLET
-    FF -->|events / receipts| RECON
-    FF -->|coupon & maturity events| SB
+    SB -.->|pacs.002 finality| PGW
+    FF ==>|mint / transfer / burn = coordination signal| CMTAT
+    CMTAT ==>|events: minted · snapshot · redeemed| FF
+    FF -.->|"trigger payout instruction"| SB
 ```
+
+Cash never touches the chain. The token's state transitions are **messages**: a `mint` says "cash received, note live"; a coupon `snapshot` says "pay these holders"; a `burn` says "redeemed — release par." Each message drives a **TradFi** payment instruction back at the bank. Every institution (issuer, paying bank, transfer agent, custodian) reads the *same* ledger instead of reconciling private copies by SWIFT/email.
 
 ### 3.1 The five phases, front to back
 
@@ -129,18 +138,20 @@ flowchart LR
 
 ---
 
-## 4. The atomicity problem (the actual hard part)
+## 4. The coordination problem (the actual hard part)
 
-A domestic instant rail and a DLT have **independent, non-atomic finality**. You cannot two-phase-commit a FedNow leg and an EVM block. Four ways to bridge, worst→best for this use case:
+Because cash stays in TradFi and the DLT only *messages*, there is **no on-chain value leg to make atomic** — and that is a feature, not a gap. The real problem is **correlating an off-chain cash event to an on-chain coordination event, exactly once, so the two never diverge**. A domestic instant rail and a DLT have **independent finality**; you cannot two-phase-commit a FedNow settlement and an EVM block. So you engineer a **reliable, idempotent correlation** with a safe reversal path — not an atomic swap.
+
+The design question is *ordering and reversibility around the escrow*, four options worst→best:
 
 | Model | Mechanism | Trade-off |
 |---|---|---|
-| **Naïve sequential** | Confirm cash → then mint | Simple; but window of "cash taken, token not yet minted." Must be reconciled + reversible. |
-| **Escrow / conditional** | Cash held in client-money/escrow; mint on release; auto-refund on timeout | Strong client protection; needs safeguarded account + legal escrow construct. |
-| **PvP / DvP via HTLC or notary** | Hash-time-locked or notary-signed atomic swap of cash-leg proof ↔ token | True delivery-vs-payment; needs a tokenized cash leg or a trusted notary oracle. |
-| **Tokenized cash leg** | Stablecoin / tokenized deposit / wCBDC on same ledger → **on-chain DvP is atomic** | Cleanest atomicity; but introduces its own money classification (EMT under MiCA, deposit-token law). |
+| **Naïve sequential** | Cash finality → then message (mint) | Window of "cash taken, note not yet recorded." Must reconcile + be reversible. |
+| **Escrow + message-on-finality** ✅ | Cash held in client-money/escrow; mint (the message) only on confirmed finality; auto-refund on timeout/reject | Strong client protection; needs a safeguarded account + legal escrow construct. **Recommended.** |
+| **Escrow release gated on mint event** | Escrow released to issuer *only after* the on-chain `mint` event is observed | Removes "minted but cash lost" and "cash released but not minted" races entirely. |
+| **Optional: tokenized cash for on-chain DvP** | Where law permits, settle the cash leg as a tokenized deposit on the *same* ledger for atomic DvP | Cleanest atomicity — but pulls money on-chain and adds its own classification (EMT / deposit-token law), the opposite of the TradFi→TradFi goal. Use only if a jurisdiction specifically wants it. |
 
-**Recommended:** *escrow-backed sequential with idempotent reconciliation* for pure-fiat rails today, migrating to *on-chain DvP against a tokenized deposit* where the jurisdiction permits it. The **cash-leg problem** — no atomic settlement asset on the securities ledger — is the single biggest architectural constraint; design the reconciliation store as the source of truth, not the chain.
+**Recommended:** *escrow + message-on-finality, with escrow release gated on the on-chain mint event, and idempotent reconciliation as source of truth.* Since the ledger carries no value, the failure surface is small: the only states are *cash-in-escrow*, *note-recorded*, *paid-out* — and any incomplete correlation auto-reverses the escrow back to the client. The reconciliation store — **not** the chain, **not** core banking alone — is the correlated source of truth binding the TradFi legs to the DLT messages.
 
 ### 4.1 Payment → mint sequence (escrow-backed, idempotent)
 

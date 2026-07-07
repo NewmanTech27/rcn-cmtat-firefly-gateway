@@ -93,9 +93,9 @@ txt(s, 1.2, 1.95, 11.2, 2.4, [
     [("Instant-Payment Front-to-Back", 42, WHITE, True)],
     [("Settlement Gateway for Tokenized RCNs", 42, WHITE, True)],
 ], sp=1.02)
-txt(s, 1.2, 4.35, 11, 1.2, [
-    [("TradFi instant rails  →  Hyperledger FireFly orchestrator  →  CMTAT tokens", 19, RGBColor(0xBF,0xD2,0xF0), False)],
-    [("representing Reverse Convertible Notes, cross-border & multi-jurisdiction.", 19, RGBColor(0xBF,0xD2,0xF0), False)],
+txt(s, 1.2, 4.35, 11.2, 1.3, [
+    [("Cash flows ", 19, RGBColor(0xBF,0xD2,0xF0), False),("TradFi → TradFi", 19, GOLD, True),(".  The permissioned DLT is the shared", 19, RGBColor(0xBF,0xD2,0xF0), False)],
+    [("messaging / coordination layer — FireFly minting CMTAT tokens for RCNs.", 19, RGBColor(0xBF,0xD2,0xF0), False)],
 ], sp=1.1)
 txt(s, 1.2, 6.98, 11, 0.4, [[("DLT engineering · FireFly integration · cross-border settlement · multi-jurisdiction compliance", 12, RGBColor(0x9A,0xAD,0xC8), False)]])
 
@@ -148,34 +148,34 @@ def band(x, w, title, col):
     box(s, x, 2.05, w, 4.5, fill=WHITE, line=LINE)
     box(s, x, 2.05, w, 0.5, fill=col, shape=MSO_SHAPE.ROUND_2_SAME_RECTANGLE)
     txt(s, x, 2.11, w, 0.4, [[(title, 13.5, WHITE, True)]], align=PP_ALIGN.CENTER)
-band(0.9, 3.7, "TradFi INSTANT-PAYMENT DOMAIN", NAVY)
-band(4.82, 3.7, "GATEWAY", ACCENT)
-band(8.74, 3.7, "PERMISSIONED DLT DOMAIN", TEAL)
+band(0.9, 3.7, "① CASH — TradFi → TradFi", NAVY)
+band(4.82, 3.7, "② GATEWAY — correlates", ACCENT)
+band(8.74, 3.7, "③ DLT — MESSAGING (no cash)", TEAL)
 def node(x, y, w, t, sub, col):
     box(s, x, y, w, 0.72, fill=BG, line=col, lw=1.25)
     txt(s, x+0.1, y+0.08, w-0.2, 0.6, [
         [(t, 12.5, INK, True)],[(sub, 10, MUTE, False)]], anchor=MSO_ANCHOR.MIDDLE, sp=1.0)
-node(1.05, 2.8, 3.4, "Client / Investor", "pays on instant rail", NAVY)
-node(1.05, 3.62, 3.4, "Instant Rail", "SEPA Inst · TIPS · FedNow · RTP · FPS", NAVY)
-node(1.05, 4.44, 3.4, "Settlement / Paying Bank", "scheme participant · escrow", NAVY)
-node(1.05, 5.26, 3.4, "Core Banking Ledger", "ISO 20022 pacs.002 finality", NAVY)
+node(1.05, 2.8, 3.4, "Client / Investor", "fiat in ↓   ·   fiat out ↑", NAVY)
+node(1.05, 3.62, 3.4, "Instant Rail IN", "subscribe — SEPA Inst · FedNow · RTP", NAVY)
+node(1.05, 4.44, 3.4, "Settlement / Paying Bank", "escrow · client-money", NAVY)
+node(1.05, 5.26, 3.4, "Instant Rail OUT", "coupon · redemption par → client", NAVY)
 node(4.97, 2.8, 3.4, "Payment Gateway", "ISO 20022 ingestion", ACCENT)
 node(4.97, 3.62, 3.4, "Recon & Idempotency", "source of truth", ACCENT)
 node(4.97, 4.44, 3.4, "Compliance Engine", "KYC/AML · Travel Rule · eligibility", ACCENT)
 node(4.97, 5.26, 3.4, "FireFly Orchestrator", "mint / transfer / burn", ACCENT)
-node(8.89, 2.8, 3.4, "CMTAT RCN Token", "+ RuleEngine", TEAL)
-node(8.89, 3.62, 3.4, "On-chain Register", "ledger-based security", TEAL)
+node(8.89, 2.8, 3.4, "CMTAT RCN Token", "shared golden record + message", TEAL)
+node(8.89, 3.62, 3.4, "Authoritative Register", "ledger-based security", TEAL)
 node(8.89, 4.44, 3.4, "Investor Wallet", "whitelisted · custodial / MPC", TEAL)
-node(8.89, 5.26, 3.4, "Events / Receipts", "back to reconciliation", TEAL)
+node(8.89, 5.26, 3.4, "Coordination Events", "mint · snapshot · burn → payout", TEAL)
 
 # ---------- 5 ATOMICITY ----------
-s = slide(); header(s, "The atomicity problem — the actual hard part", "Cash leg vs security leg"); pagenum(s,5)
-txt(s, 0.9, 1.85, 11.5, 0.5, [[("A domestic instant rail and a DLT have independent, non-atomic finality. You cannot two-phase-commit FedNow and an EVM block.", 14, MUTE, False)]])
+s = slide(); header(s, "The coordination problem — the actual hard part", "No on-chain value leg to make atomic"); pagenum(s,5)
+txt(s, 0.9, 1.85, 11.5, 0.5, [[("Cash stays in TradFi; the DLT only messages. So the problem isn’t atomic value transfer — it’s correlating an off-chain cash event to an on-chain message, exactly once, with a safe reversal.", 13.5, MUTE, False)]])
 rows = [
-    ("Naïve sequential", "Confirm cash → then mint", "Window of “cash taken, token not minted.” Must reconcile + reverse.", MUTE),
-    ("Escrow / conditional", "Cash in client-money escrow; mint on release; auto-refund on timeout", "Strong client protection; needs safeguarded account.", ACCENT),
-    ("PvP / DvP (HTLC / notary)", "Atomic swap of cash proof ↔ token", "True delivery-vs-payment; needs tokenized cash or notary oracle.", TEAL),
-    ("Tokenized cash leg", "Stablecoin / tokenized deposit / wCBDC on same ledger", "Cleanest atomicity; adds money-classification (EMT / deposit token).", GOLD),
+    ("Naïve sequential", "Cash finality → then message (mint)", "Window of “cash taken, note not recorded.” Must reconcile + reverse.", MUTE),
+    ("Escrow + msg-on-finality  ✅", "Escrow held; mint only on confirmed finality; auto-refund on timeout", "Strong client protection; needs safeguarded account. Recommended.", ACCENT),
+    ("Escrow release gated on mint", "Escrow → issuer only AFTER on-chain mint event observed", "Kills both races: minted-but-cash-lost and cash-released-but-not-minted.", TEAL),
+    ("Optional on-chain DvP", "Tokenized deposit on same ledger, where law permits", "Cleanest atomicity — but pulls money on-chain, against the TradFi→TradFi goal.", GOLD),
 ]
 y = 2.55
 box(s, 0.9, y, 11.53, 0.42, fill=INK, shape=MSO_SHAPE.RECTANGLE)
@@ -189,7 +189,7 @@ for name, mech, trade, col in rows:
     txt(s, 3.9, y+0.1, 4.2, 0.7, [[(mech,11.5,MUTE,False)]], anchor=MSO_ANCHOR.MIDDLE)
     txt(s, 8.2, y+0.1, 4.1, 0.7, [[(trade,11.5,MUTE,False)]], anchor=MSO_ANCHOR.MIDDLE)
     y += 0.86
-txt(s, 0.9, y+0.08, 11.5, 0.4, [[("Recommended: ", 13, GOLD, True),("escrow-backed sequential + idempotent reconciliation now → on-chain DvP against a tokenized deposit where permitted.", 13, INK, False)]])
+txt(s, 0.9, y+0.08, 11.5, 0.4, [[("Recommended: ", 13, GOLD, True),("escrow + message-on-finality, escrow release gated on the mint event, idempotent reconciliation as source of truth. No value on-chain = tiny failure surface.", 13, INK, False)]])
 
 # ---------- 6 SEQUENCE ----------
 s = slide(); header(s, "Payment → mint sequence (escrow, idempotent)", "Exactly-once"); pagenum(s,6)
@@ -389,10 +389,10 @@ txt(s,0.9,6.9,11.5,0.4,[[("No warranty. Validate every control with licensed cou
 s = slide(INK)
 box(s,0,0,SW,SH,fill=INK,shape=MSO_SHAPE.RECTANGLE)
 box(s,0.9,2.0,0.09,2.0,fill=GOLD,shape=MSO_SHAPE.RECTANGLE)
-txt(s,1.2,2.15,11,1.6,[
- [("The token is easy.",34,WHITE,True)],
- [("Atomicity across two finalities, across jurisdictions,",30,RGBColor(0xBF,0xD2,0xF0),True)],
- [("is the architecture.",30,RGBColor(0xBF,0xD2,0xF0),True)],
+txt(s,1.2,2.15,11.2,1.9,[
+ [("Fiat in. Fiat out. TradFi both ends.",32,WHITE,True)],
+ [("The DLT is the shared message bus —",29,RGBColor(0xBF,0xD2,0xF0),True)],
+ [("correlation, not value transfer, is the architecture.",29,RGBColor(0xBF,0xD2,0xF0),True)],
 ],sp=1.06)
 txt(s,1.2,4.6,11,1.2,[
  [("• Recon store = source of truth   • Idempotency = exactly-once mint",16,WHITE,False)],
