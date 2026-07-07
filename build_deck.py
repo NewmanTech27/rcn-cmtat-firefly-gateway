@@ -517,5 +517,27 @@ txt(s,1.2,4.6,11,1.2,[
 ],sp=1.35)
 txt(s,1.2,6.5,11,0.5,[[("Full write-up, diagrams & code skeletons in the companion repo & gist.  Not legal advice.",13,RGBColor(0x9A,0xAD,0xC8),False)]])
 
+# ---------- speaker notes ----------
+NOTES = [
+ "Title. One line: cash flows TradFi to TradFi; the permissioned DLT is a shared messaging/coordination layer, not a value rail. FireFly mints CMTAT tokens representing RCNs. Frame the whole talk as fiat-in / coordinate / fiat-out.",
+ "The product. An RCN is a structured debt security = zero-coupon note + a short put the investor implicitly sells for an above-market coupon. Barrier OK -> cash par; barrier breached -> physical delivery at a loss. Classification as a security (not e-money) is what drives the entire compliance overlay.",
+ "Building blocks. CMTAT gives audited security-token primitives (mint/burn, pause, freeze, RuleEngine eligibility, snapshot, debt module). FireFly is the orchestration supernode: token+blockchain connectors, durable event streams, off-chain data exchange for PII, idempotent transaction manager. Together: 'cash settled' -> 'note recorded once, everyone notified.'",
+ "Architecture. Three bands: cash stays in TradFi (rail in -> escrow -> rail out); the gateway correlates; the DLT only messages. Bold arrows are coordination signals, dashed arrows are payout instructions back to the bank. Every institution reads the same ledger instead of reconciling private copies.",
+ "The real hard part. There is NO on-chain value leg to make atomic - that's a feature. The problem is correlating an off-chain cash event to an on-chain message exactly once with a safe reversal. Recommended: escrow + message-on-finality, escrow release gated on the mint event. No value on-chain = tiny failure surface.",
+ "Mint sequence. Client pays -> escrow -> pacs.002 finality -> idempotency check -> FireFly mints (operationId = subscriptionId) -> mint event releases escrow to issuer. Re-delivered payment events never double-mint. On reject/timeout the escrow auto-refunds - cash is never trapped.",
+ "Reverse leg. On-chain event is the trigger, cash is the effect, back out on a TradFi rail. Coupon uses the snapshot holder-of-record set; burn precedes payout; physical settlement is burn + off-chain custodian delivery. Keyed on eventId for exactly-once payout.",
+ "Lifecycle. Three ways out of Active: recurring coupon cycle (snapshot -> pay -> back), an involuntary Frozen hold (sanctions/court), and the terminal Exit where a single barrier decision routes to cash redemption vs physical delivery. Autocall enters Exit early.",
+ "Jurisdiction matrix. The token's nature (structured debt security) is stable, but rails, register law, disclosure and marketing rules diverge. All gating lives in the RuleEngine, not the UI: wallet jurisdiction checked on every transfer, Travel-Rule payloads off-chain (IVMS-101), PII as hashes only.",
+ "Implementation. Two thin layers. The Solidity token is deliberately minimal - lifecycle is driven by the off-chain FireFly orchestrator holding ISSUER_ROLE. The orchestrator is idempotent on subscriptionId and waits for finality. Business logic stays on upgradeable modules.",
+ "Reliability & threats. Design failure-first: durable streams, idempotency, escrow auto-refund, confirm-on-finality. Threats map to controls: HSM/MPC + multisig for keys, signed multi-source oracle, RuleEngine on every transfer, PII off-chain, jurisdiction enforced on transfer. Invariant: the reconciliation store is the source of truth.",
+ "Fiat-out sequence in detail. Walk the coupon and both redemption branches. Emphasise: burn is the authoritative 'settling' signal and always precedes cash; eventId idempotency makes a crash between burn and payout recoverable.",
+ "Variant-B reconciler. When the register stays at the transfer agent, chain and TA book can drift, so reconcile holder-by-holder plus a supply invariant on every finalized event batch. On divergence: contain (pause) and alarm - never auto-fix legal truth. Optional Merkle-root anchor gives tamper-evident proof with no PII.",
+ "Design fork. Variant A: token IS the register (ledger-based security) - needs DLT securities law, gives on-chain title finality. Variant B: token is only the message, register stays at the transfer agent - deploys anywhere, US in scope. Same code; only the legal wrapper and reconciliation duty change. B is the cross-border default.",
+ "Governance. No ranked decision is unilateral. A standing specialist committee (legal, compliance, risk, payments, DLT) owns the rankings and each product approval. Bound on-chain: committee approval is a mint precondition - no sign-off, no product record, no mint, no cash. Authority is enforced end-to-end, not filed in a drawer.",
+ "Close. Fiat in, fiat out, TradFi both ends. The DLT is a shared message bus; correlation - not value transfer - is the architecture. Everything is illustrative and unaudited; validate with counsel and regulators before production.",
+]
+for sl, note in zip(prs.slides, NOTES):
+    sl.notes_slide.notes_text_frame.text = note
+
 prs.save("RCN-CMTAT-FireFly-Gateway.pptx")
 print("saved", len(prs.slides.__iter__.__self__._sldIdLst), "slides")
