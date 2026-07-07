@@ -385,7 +385,33 @@ for k,(num,t,d) in enumerate(steps):
     txt(s,x+0.95,y+0.5,colw-1.05,0.45,[[(d,11,MUTE,False)]],sp=0.98)
 txt(s,0.9,6.9,11.5,0.4,[[("No warranty. Validate every control with licensed counsel and your regulators before production issuance.",11.5,MUTE,False)]])
 
-# ---------- 12 CLOSE ----------
+# ---------- 12 DESIGN FORK ----------
+s = slide(); header(s, "Design fork — is the token the register, or just the message?", "Pick one per issuance"); pagenum(s,12)
+# Variant A
+box(s,0.9,2.0,5.6,4.35,fill=WHITE,line=LINE)
+box(s,0.9,2.0,5.6,0.55,fill=NAVY,shape=MSO_SHAPE.ROUND_2_SAME_RECTANGLE)
+txt(s,1.1,2.08,5.2,0.4,[[("A · Token IS the register",15,WHITE,True),("   (ledger-based security)",11,RGBColor(0xBF,0xD2,0xF0),False)]])
+bullet(s,1.15,2.75,5.1,[
+ ("Legal title lives on-chain", " — transfer = change of title"),
+ ("Needs DLT securities law", " — CH, EU Pilot, DE eWpG, LU"),
+ ("Minimal reconciliation", " — the chain IS the book"),
+ ("Reach limited", " to recognising jurisdictions"),
+ ("Best:", " single friendly jurisdiction, full DLT-native finality"),
+],sz=13)
+# Variant B
+box(s,6.7,2.0,5.73,4.35,fill=WHITE,line=TEAL,lw=1.5)
+box(s,6.7,2.0,5.73,0.55,fill=TEAL,shape=MSO_SHAPE.ROUND_2_SAME_RECTANGLE)
+txt(s,6.9,2.08,5.3,0.4,[[("B · Token is only the message",15,WHITE,True),("   ✅ default",11,WHITE,True)]])
+bullet(s,6.95,2.75,5.25,[
+ ("Register stays at transfer agent", " — TA book = legal truth"),
+ ("Needs no DLT securities law", " — deploy anywhere, US in scope"),
+ ("Chain ↔ TA book reconcile", " — chain = operational truth"),
+ ("Broad cross-border reach", " — conventional security everywhere"),
+ ("Best:", " multi-jurisdiction rollout, minimise legal novelty"),
+],sz=13,mk=TEAL)
+txt(s,0.9,6.5,11.5,0.7,[[("Code & FireFly orchestration are identical. ",13,GOLD,True),("Only the legal wrapper, reconciliation duty, and the “legal basis” matrix row change. For a cross-border TradFi→TradFi build, B is the natural default; reserve A for a Swiss-law (or EU-Pilot) issuance wanting on-chain title finality.",13,INK,False)]])
+
+# ---------- 13 CLOSE ----------
 s = slide(INK)
 box(s,0,0,SW,SH,fill=INK,shape=MSO_SHAPE.RECTANGLE)
 box(s,0.9,2.0,0.09,2.0,fill=GOLD,shape=MSO_SHAPE.RECTANGLE)

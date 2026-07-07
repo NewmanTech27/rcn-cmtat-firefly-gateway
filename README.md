@@ -428,7 +428,45 @@ export async function distributeCoupon(recordDate: string) {
 
 ---
 
-## 11. References
+## 11. Design fork: is the token the *register*, or just the *message*?
+
+Once cash lives entirely in TradFi and the DLT is a coordination layer, a genuine architectural + legal fork opens: **what is the token, legally?** Two coherent answers, and you must pick one per issuance — they carry different regulatory bars, benefits, and failure modes.
+
+### Variant A — Token IS the authoritative register (*ledger-based security*)
+
+The on-chain CMTAT balance is the **legally dispositive record of title**. Transfer on-chain = transfer of ownership. This is what Swiss DLT law (CO 973d ff.) and the EU DLT Pilot Regime were built to enable.
+
+- **Legal basis needed:** a jurisdiction that recognises ledger-based / dematerialised securities on a DLT (CH ✅, EU via Pilot Regime / CSDR carve-out, LU, DE eWpG). Without it, on-chain transfer has no legal effect.
+- **Benefit:** true atomic change of title, single golden source, no separate registrar reconciliation, programmable transfer restrictions *are* the law.
+- **Cost:** highest regulatory bar; the ledger's integrity, key management and governance are now *systemically legal*, not just operational; harder cross-border where a jurisdiction doesn't recognise ledger-based title.
+
+### Variant B — Token is only a coordination *record / message*; the register stays in TradFi
+
+The **transfer agent's traditional book remains the authoritative register.** The on-chain token is a **mirror + message bus**: it coordinates the parties, signals lifecycle events, and gates eligibility, but legal title is established off-chain by the registrar. The chain is *operational truth*, the TA book is *legal truth*, and they are kept in sync (TA is a node / signer).
+
+- **Legal basis needed:** essentially none novel — you are running a conventional registered security with a DLT operational overlay. No ledger-based-security regime required.
+- **Benefit:** deploy in **any** jurisdiction today, including ones with no DLT securities law (US, most of APAC); lower legal risk; the DLT delivers its real value here anyway — killing inter-institution reconciliation spaghetti.
+- **Cost:** you must reconcile chain ↔ TA book (they *can* diverge); on-chain transfer is not, by itself, a change of legal title — it's an instruction the TA effects; slightly weaker "single source of truth" story.
+
+### Which to pick
+
+| Question | Variant A (register on-chain) | Variant B (message bus only) |
+|---|---|---|
+| Legal title lives… | on-chain (ledger-based security) | in the transfer agent's book |
+| Needs DLT securities law? | **Yes** (CH, EU Pilot, DE, LU) | **No** — deploy anywhere |
+| CMTAT still used? | Yes (as the register) | Yes (as record + RuleEngine gating) |
+| Reconciliation burden | minimal (chain *is* the book) | chain ↔ TA book must stay in sync |
+| Cross-border reach | limited to recognising jurisdictions | broad — conventional security everywhere |
+| On-chain transfer = title change? | **Yes** | No — an instruction the TA effects |
+| Best when | single/friendly jurisdiction, want full DLT-native benefits | multi-jurisdiction rollout, US in scope, minimise legal novelty |
+
+**Guidance for this build:** since the stated goal is **cross-border, TradFi→TradFi, DLT-as-messaging**, **Variant B is the natural default** — it matches "the money never leaves TradFi" with "the *title* never has to leave TradFi either," and it deploys where DLT securities law doesn't exist yet. Reserve **Variant A** for issuances domiciled in a ledger-based-security jurisdiction (e.g. a Swiss-law RCN) where you want on-chain title finality. The code and FireFly orchestration are **identical**; only the legal wrapper, the reconciliation obligation, and the jurisdiction matrix's "legal basis" row change. Design the reconciliation store so it can serve *either* — in A it audits the chain, in B it *is* the bridge to the TA book.
+
+> Practical consequence for §6's matrix: under **Variant B** the "Legal basis / token-as-register" row collapses to *"conventional registered security + DLT operational overlay"* across all five jurisdictions, and the US column stops being a blocker.
+
+---
+
+## 12. References
 
 - CMTAT — https://github.com/CMTA/CMTAT · CMTA standards — https://cmta.ch
 - Hyperledger FireFly — https://hyperledger.github.io/firefly/
