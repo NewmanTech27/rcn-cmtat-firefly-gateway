@@ -274,7 +274,7 @@ data = [
  ("Investor gate","Qualified/retail","MiFID categories","FCA categorisation","Accredited/instl","Accredited/QIB"),
  ("AML / Travel","AMLA","AMLD · TFR","MLR 2017","MAS Notice","BSA / FinCEN"),
 ]
-x0=0.9; wlabel=1.9; wc=(11.53-wlabel)/5; y=2.05; rh=0.82
+x0=0.9; wlabel=1.9; wc=(11.53-wlabel)/5; y=2.0; rh=0.735
 # header row
 box(s,x0,y,wlabel,rh,fill=INK,shape=MSO_SHAPE.RECTANGLE)
 for j in range(5):

@@ -6,6 +6,22 @@
 >
 > **⚠️ Not legal, tax, accounting or investment advice.** This is an engineering reference. Every control described must be validated with licensed counsel and your regulators in each jurisdiction before production use. Regulatory citations are directional and current as of authoring; verify against the live rulebooks.
 
+📊 **Slide deck:** [`RCN-CMTAT-FireFly-Gateway.pptx`](./RCN-CMTAT-FireFly-Gateway.pptx) (16 slides, 16:9) · regenerate with [`build_deck.py`](./build_deck.py) (`pip install python-pptx && python3 build_deck.py`).
+
+**At a glance:** `client pays (TradFi instant rail)` → `escrow + finality` → `FireFly mints CMTAT RCN token = coordination message` → `lifecycle: coupon snapshot · eligible transfer · barrier observe` → `burn` → `client paid back (TradFi instant rail)`. **Cash never touches the chain; the DLT is the shared message bus between institutions.**
+
+### Contents
+
+| # | Section | # | Section |
+|---|---|---|---|
+| 0 | [TL;DR](#0-tldr) | 7 | [Code skeletons](#7-code-skeletons) |
+| 1 | [The instrument (RCN)](#1-scope-actors-and-the-product) | 8 | [Reliability & failure modes](#8-reliability-reconciliation-and-failure-modes) |
+| 2 | [Why CMTAT + FireFly](#2-why-cmtat--firefly) | 9 | [Threat model](#9-threat-model-abridged) |
+| 3 | [Front-to-back architecture](#3-front-to-back-architecture) | 10 | [Build sequence](#10-build-sequence-pragmatic) |
+| 4 | [The coordination problem](#4-the-coordination-problem-the-actual-hard-part) | 11 | [Design fork: register vs message](#11-design-fork-is-the-token-the-register-or-just-the-message) |
+| 5 | [CMTAT ↔ RCN lifecycle](#5-cmtat--rcn-lifecycle-mapping) | 12 | [Governance — specialist committee](#12-governance--the-specialist-committee-that-ranks--signs-off) |
+| 6 | [Jurisdiction matrix](#6-multi-jurisdiction-compliance-matrix) | 13 | [References](#13-references) |
+
 ---
 
 ## 0. TL;DR
